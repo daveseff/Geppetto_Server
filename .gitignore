@@ -1,0 +1,8 @@
+.pytest_cache
+*.pyc
+__pycache__
+payload
+dist
+*.state.json
+debug
+build.sh
