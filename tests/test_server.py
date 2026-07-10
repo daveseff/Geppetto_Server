@@ -4,7 +4,7 @@ import ssl
 from pathlib import Path
 
 from geppetto_server.server import build_ssl_context, extract_common_name
-from geppetto_server.settings import Settings
+from geppetto_server.settings import Settings, load_settings
 
 
 def test_extract_common_name_from_peer_cert() -> None:
@@ -22,6 +22,11 @@ def test_build_ssl_context_requires_client_auth(tmp_path: Path) -> None:
         server_cert=tmp_path / "server.crt",
         server_key=tmp_path / "server.key",
         ca_cert=tmp_path / "ca.crt",
+        ca_key=tmp_path / "ca.key",
+        pending_csr_dir=tmp_path / "csr_pending",
+        signed_cert_dir=tmp_path / "certs",
+        log_file=tmp_path / "geppetto-server.log",
+        server_name="config.example.invalid",
         bind_host="127.0.0.1",
         bind_port=8443,
     )
@@ -47,9 +52,34 @@ def test_build_ssl_context_requires_client_auth(tmp_path: Path) -> None:
         ssl.create_default_context = original  # type: ignore[assignment]
 
     assert context is fake_context
-    assert fake_context.verify_mode == ssl.CERT_REQUIRED
+    assert fake_context.verify_mode == ssl.CERT_OPTIONAL
     assert loaded == {
         "certfile": str(settings.server_cert),
         "keyfile": str(settings.server_key),
         "cafile": str(settings.ca_cert),
     }
+
+
+def test_load_settings_defaults_to_server_etc_tree(monkeypatch) -> None:
+    for key in (
+        "GEPPETTO_SERVER_BASE",
+        "GEPPETTO_CONFIG_ROOT",
+        "GEPPETTO_SERVER_CERT",
+        "GEPPETTO_SERVER_KEY",
+        "GEPPETTO_CA_CERT",
+        "GEPPETTO_CA_KEY",
+        "GEPPETTO_PENDING_CSR_DIR",
+        "GEPPETTO_SIGNED_CERT_DIR",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    settings = load_settings()
+
+    assert settings.config_root == Path("/etc/geppetto_server/config")
+    assert settings.server_cert == Path("/etc/geppetto_server/pki/server.crt")
+    assert settings.server_key == Path("/etc/geppetto_server/pki/server.key")
+    assert settings.ca_cert == Path("/etc/geppetto_server/pki/ca.crt")
+    assert settings.ca_key == Path("/etc/geppetto_server/pki/ca.key")
+    assert settings.pending_csr_dir == Path("/etc/geppetto_server/csr_pending")
+    assert settings.signed_cert_dir == Path("/etc/geppetto_server/certs")
+    assert settings.log_file == Path("/var/log/geppetto/geppetto-server.log")

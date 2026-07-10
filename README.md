@@ -28,16 +28,37 @@ Authentication is certificate-based:
 ## Run
 
 ```bash
-export GEPPETTO_CONFIG_ROOT=/srv/geppetto/config
-export GEPPETTO_SERVER_CERT=/srv/geppetto/pki/server.crt
-export GEPPETTO_SERVER_KEY=/srv/geppetto/pki/server.key
-export GEPPETTO_CA_CERT=/srv/geppetto/pki/ca.crt
+export GEPPETTO_SERVER_BASE=/etc/geppetto_server
 geppetto-config-server
 ```
 
-Optional bind overrides:
+With packages installed, run it as a daemon:
 
 ```bash
+systemctl enable --now geppetto-server
+```
+
+On first start, the daemon initializes a local CA and server certificate if
+`/etc/geppetto_server/pki/ca.crt` and `/etc/geppetto_server/pki/server.crt`
+do not exist. Set `GEPPETTO_SERVER_NAME` in `/etc/geppetto_server/geppetto-server.env`
+before first start if the certificate DNS name should be different from the
+machine FQDN.
+
+By default the server reads:
+
+- `/etc/geppetto_server/config`
+- `/etc/geppetto_server/pki/server.crt`
+- `/etc/geppetto_server/pki/server.key`
+- `/etc/geppetto_server/pki/ca.crt`
+- `/etc/geppetto_server/pki/ca.key`
+- `/etc/geppetto_server/csr_pending`
+- `/etc/geppetto_server/certs`
+- `/var/log/geppetto/geppetto-server.log`
+
+Optional overrides:
+
+```bash
+export GEPPETTO_CONFIG_ROOT=/srv/geppetto/config
 export GEPPETTO_SERVER_HOST=0.0.0.0
 export GEPPETTO_SERVER_PORT=8443
 ```
@@ -45,7 +66,7 @@ export GEPPETTO_SERVER_PORT=8443
 ## Generate certs
 
 ```bash
-./scripts/generate_certs.sh /srv/geppetto/pki config.example.com host1 host2
+./scripts/generate_certs.sh /etc/geppetto_server/pki config.example.com host1 host2
 ```
 
 This creates:
@@ -53,6 +74,67 @@ This creates:
 - a local CA
 - a server certificate for `config.example.com`
 - one client certificate/key pair per host, with the host name as the certificate CN
+
+## Agent Enrollment
+
+Agents can bootstrap their own client key and CSR. Configure the agent with paths for the CA, client cert, and private key. On first run, if those files are missing, `geppetto-auto` will:
+
+- download `/v1/ca` into `config_service_ca_cert`
+- generate `config_service_client_key`
+- generate a CSR next to the client cert path, for example `host1.csr`
+- submit the CSR to `/v1/csr/<hostname>`
+
+By default the server stores submitted CSRs in `/etc/geppetto_server/csr_pending` and returns `202 Accepted`. Sign a pending CSR with:
+
+```bash
+/home/dave/git/Geppetto_Server/scripts/sign_csr.sh host1 /etc/geppetto_server
+```
+
+On the next agent run, the agent submits the same CSR again. If the signed cert exists in `/etc/geppetto_server/certs/host1.crt`, the server returns it and the agent writes it to `config_service_client_cert`.
+
+For labs, set `GEPPETTO_AUTOSIGN=true` on the server to sign CSRs immediately. Do not use autosign for untrusted networks.
+
+## Certificate CLI
+
+The server CLI provides Puppet-style certificate operations:
+
+```bash
+geppetto-config-server init
+geppetto-config-server cert list
+geppetto-config-server cert status host1
+geppetto-config-server cert sign host1
+geppetto-config-server cert clean host1
+```
+
+`init` creates the CA and server certificate if they do not already exist.
+`cert sign` signs a pending CSR from `/etc/geppetto_server/csr_pending`.
+`cert clean` removes both the pending CSR and signed cert for the host.
+
+## Packaging
+
+RPM-based systems can use the root spec file:
+
+```bash
+rpmbuild -ba geppetto-server.spec
+```
+
+Arch-based systems can use:
+
+```bash
+cd packaging
+makepkg -si
+```
+
+The Arch `PKGBUILD` builds from the parent checkout, so it works directly from
+`Geppetto_Server/packaging` without manually creating `geppetto_server-0.1.0.tar.gz`.
+
+Both package definitions install:
+
+- `geppetto-config-server`
+- `geppetto-server.service`
+- `/etc/geppetto_server/geppetto-server.env`
+- `/etc/geppetto_server/{config,pki,csr_pending,certs}`
+- helper scripts under `/usr/share/geppetto_server/scripts`
 
 ## Agent config
 

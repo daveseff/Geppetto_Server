@@ -1,0 +1,62 @@
+# Maintainer: Geppetto Maintainers <noreply@example.invalid>
+
+pkgname=geppetto_server
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="REST config service for Geppetto agents"
+arch=('any')
+url="https://github.com/daveseff/Geppetto_Server"
+license=('MIT')
+depends=('python' 'openssl' 'systemd')
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling')
+source=()
+sha256sums=()
+backup=('etc/geppetto_server/geppetto-server.env')
+_py="/usr/bin/python"
+_env="env -u VIRTUAL_ENV -u PYTHONHOME -u PIP_REQUIRE_VIRTUALENV PYTHONNOUSERSITE=1"
+
+prepare() {
+  rm -rf "$srcdir/$pkgname-$pkgver"
+  mkdir -p "$srcdir/$pkgname-$pkgver"
+
+  # Build from the parent checkout so `makepkg -si` works directly in packaging/.
+  tar -C "$startdir/.." \
+      --exclude './.git' \
+      --exclude './.pytest_cache' \
+      --exclude './build' \
+      --exclude './dist' \
+      --exclude './*.egg-info' \
+      --exclude './packaging/pkg' \
+      --exclude './packaging/src' \
+      --exclude './packaging/*.pkg.tar*' \
+      -cf - . | tar -C "$srcdir/$pkgname-$pkgver" -xf -
+}
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+  ${_env} ${_py} -m build --wheel --no-isolation
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  ${_env} ${_py} -m installer --destdir="$pkgdir" dist/*.whl
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+
+  install -Dm644 packaging/geppetto-server.env "$pkgdir/etc/geppetto_server/geppetto-server.env"
+  install -Dm644 packaging/systemd/geppetto-server.service "$pkgdir/usr/lib/systemd/system/geppetto-server.service"
+  install -Dm644 packaging/sysusers.d/geppetto-server.conf "$pkgdir/usr/lib/sysusers.d/geppetto-server.conf"
+  install -Dm644 packaging/tmpfiles.d/geppetto-server.conf "$pkgdir/usr/lib/tmpfiles.d/geppetto-server.conf"
+  install -Dm755 scripts/generate_certs.sh "$pkgdir/usr/share/geppetto_server/scripts/generate_certs.sh"
+  install -Dm755 scripts/sign_csr.sh "$pkgdir/usr/share/geppetto_server/scripts/sign_csr.sh"
+
+  install -d "$pkgdir/etc/geppetto_server/config/defaults" \
+             "$pkgdir/etc/geppetto_server/config/groups" \
+             "$pkgdir/etc/geppetto_server/config/hosts" \
+             "$pkgdir/etc/geppetto_server/config/templates" \
+             "$pkgdir/etc/geppetto_server/pki" \
+             "$pkgdir/etc/geppetto_server/csr_pending" \
+             "$pkgdir/etc/geppetto_server/certs" \
+             "$pkgdir/var/log/geppetto"
+}

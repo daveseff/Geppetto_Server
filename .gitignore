@@ -3,6 +3,9 @@
 __pycache__
 payload
 dist
+packaging/pkg/
+packaging/src/
+packaging/*.pkg.tar*
 *.state.json
 debug
 build.sh

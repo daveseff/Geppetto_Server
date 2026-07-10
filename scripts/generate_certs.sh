@@ -52,3 +52,8 @@ for host_name in "$@"; do
 done
 
 rm -f "$server_csr" "$server_ext" "$client_ext" "$out_dir"/*.csr
+chmod 600 "$out_dir"/*.key
+chmod 644 "$out_dir"/*.crt "$out_dir"/*.srl 2>/dev/null || true
+if id geppetto-server >/dev/null 2>&1; then
+  chown -R geppetto-server:geppetto-server "$out_dir"
+fi

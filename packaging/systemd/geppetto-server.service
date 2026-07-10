@@ -1,0 +1,26 @@
+[Unit]
+Description=Geppetto Config Server
+Documentation=file:/usr/share/doc/geppetto_server/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=geppetto-server
+Group=geppetto-server
+EnvironmentFile=-/etc/geppetto_server/geppetto-server.env
+ExecStart=/usr/bin/geppetto-config-server
+Restart=on-failure
+RestartSec=5s
+WorkingDirectory=/etc/geppetto_server
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/geppetto_server
+ReadWritePaths=/var/log/geppetto
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
