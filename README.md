@@ -87,6 +87,58 @@ export GEPPETTO_SERVER_HOST=0.0.0.0
 export GEPPETTO_SERVER_PORT=8443
 ```
 
+## Containers
+
+The server container should persist `/var/lib/geppetto_server`. That path holds:
+
+- `config/`
+- `pki/`
+- `csr_pending/`
+- `certs/`
+
+If you do not persist it, task replacements will generate a new CA and existing
+agents will stop trusting the server.
+
+Build the image:
+
+```bash
+docker build -t geppetto-server .
+```
+
+Run it with a persistent host directory:
+
+```bash
+mkdir -p ./docker-data/geppetto_server/config
+docker run -d \
+  --name geppetto-server \
+  -p 8443:8443 \
+  -e GEPPETTO_SERVER_NAME=config.example.com \
+  -e GEPPETTO_SERVER_ALT_NAMES=config,config.example.com \
+  -v "$PWD/docker-data/geppetto_server:/var/lib/geppetto_server" \
+  geppetto-server
+```
+
+The image:
+
+- runs `geppetto-config-server serve` by default
+- writes logs to stdout
+- initializes CA/server certificates on first start
+- exposes `/health` for container health checks
+
+For local Docker Compose:
+
+```bash
+export GEPPETTO_SERVER_NAME=config.example.com
+docker compose up -d --build
+```
+
+Place your config tree under `./docker-data/geppetto_server/config`.
+
+For ECS/Fargate, the important requirement is that
+`/var/lib/geppetto_server` is backed by persistent storage such as EFS. If you
+keep the container running as UID/GID `10001`, make sure the mounted path is
+writable by that user.
+
 ## Generate certs
 
 ```bash

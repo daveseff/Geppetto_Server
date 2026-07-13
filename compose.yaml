@@ -1,0 +1,13 @@
+services:
+  geppetto-server:
+    build: .
+    image: geppetto-server:local
+    ports:
+      - "8443:8443"
+    environment:
+      GEPPETTO_SERVER_NAME: ${GEPPETTO_SERVER_NAME:-localhost}
+      GEPPETTO_SERVER_ALT_NAMES: ${GEPPETTO_SERVER_ALT_NAMES:-}
+      GEPPETTO_AUTOSIGN: ${GEPPETTO_AUTOSIGN:-false}
+    volumes:
+      - ${GEPPETTO_STATE_DIR:-./docker-data/geppetto_server}:/var/lib/geppetto_server
+    restart: unless-stopped
