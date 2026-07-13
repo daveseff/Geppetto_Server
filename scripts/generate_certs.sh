@@ -9,6 +9,7 @@ fi
 out_dir=$1
 server_name=$2
 shift 2
+server_alt_names=${GEPPETTO_SERVER_ALT_NAMES:-}
 
 mkdir -p "$out_dir"
 ca_key="$out_dir/ca.key"
@@ -16,20 +17,40 @@ ca_cert="$out_dir/ca.crt"
 server_key="$out_dir/server.key"
 server_csr="$out_dir/server.csr"
 server_cert="$out_dir/server.crt"
+ca_ext="$out_dir/ca.ext"
 server_ext="$out_dir/server.ext"
 client_ext="$out_dir/client.ext"
 
 openssl genrsa -out "$ca_key" 4096
+cat >"$ca_ext" <<EOF
+basicConstraints=critical,CA:TRUE,pathlen:1
+keyUsage=critical,keyCertSign,cRLSign
+subjectKeyIdentifier=hash
+EOF
 openssl req -x509 -new -nodes -key "$ca_key" -sha256 -days 3650 \
-  -subj "/CN=Geppetto Config CA" -out "$ca_cert"
+  -subj "/CN=Geppetto Config CA" \
+  -addext "basicConstraints=critical,CA:TRUE,pathlen:1" \
+  -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -addext "subjectKeyIdentifier=hash" \
+  -out "$ca_cert"
 
 openssl genrsa -out "$server_key" 4096
 openssl req -new -key "$server_key" -subj "/CN=$server_name" -out "$server_csr"
+server_san="DNS:$server_name"
+if [ -n "$server_alt_names" ]; then
+  IFS=',' read -r -a alt_names <<<"$server_alt_names"
+  for alt_name in "${alt_names[@]}"; do
+    alt_name="${alt_name//[[:space:]]/}"
+    if [ -n "$alt_name" ]; then
+      server_san="$server_san,DNS:$alt_name"
+    fi
+  done
+fi
 cat >"$server_ext" <<EOF
 basicConstraints=CA:FALSE
 keyUsage=digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
-subjectAltName=DNS:$server_name
+subjectAltName=$server_san
 EOF
 openssl x509 -req -in "$server_csr" -CA "$ca_cert" -CAkey "$ca_key" -CAcreateserial \
   -out "$server_cert" -days 825 -sha256 -extfile "$server_ext"
@@ -51,7 +72,7 @@ for host_name in "$@"; do
     -out "$client_cert" -days 825 -sha256 -extfile "$client_ext"
 done
 
-rm -f "$server_csr" "$server_ext" "$client_ext" "$out_dir"/*.csr
+rm -f "$server_csr" "$ca_ext" "$server_ext" "$client_ext" "$out_dir"/*.csr
 chmod 600 "$out_dir"/*.key
 chmod 644 "$out_dir"/*.crt "$out_dir"/*.srl 2>/dev/null || true
 if id geppetto-server >/dev/null 2>&1; then

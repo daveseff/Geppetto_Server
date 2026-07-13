@@ -32,6 +32,18 @@ export GEPPETTO_SERVER_BASE=/etc/geppetto_server
 geppetto-config-server
 ```
 
+Help is available either as flags or commands:
+
+```bash
+geppetto-config-server --help
+geppetto-config-server help
+geppetto-config-server init help
+geppetto-config-server help cert
+geppetto-config-server help cert sign
+geppetto-config-server cert help
+geppetto-config-server cert sign help
+```
+
 With packages installed, run it as a daemon:
 
 ```bash
@@ -42,7 +54,19 @@ On first start, the daemon initializes a local CA and server certificate if
 `/etc/geppetto_server/pki/ca.crt` and `/etc/geppetto_server/pki/server.crt`
 do not exist. Set `GEPPETTO_SERVER_NAME` in `/etc/geppetto_server/geppetto-server.env`
 before first start if the certificate DNS name should be different from the
-machine FQDN.
+machine FQDN. Set `GEPPETTO_SERVER_ALT_NAMES` to a comma-separated list when
+agents may connect using more than one DNS name, for example:
+
+```bash
+GEPPETTO_SERVER_NAME=saturn
+GEPPETTO_SERVER_ALT_NAMES=saturn.solar1.net
+geppetto-config-server init
+systemctl restart geppetto-server
+```
+
+`init` preserves the CA but regenerates the server certificate/key when the
+existing server certificate does not include the configured DNS names. Use
+`init --force` only when you intentionally want to rotate the CA too.
 
 By default the server reads:
 
@@ -69,6 +93,14 @@ export GEPPETTO_SERVER_PORT=8443
 ./scripts/generate_certs.sh /etc/geppetto_server/pki config.example.com host1 host2
 ```
 
+Set `GEPPETTO_SERVER_ALT_NAMES` before running the helper to add extra server
+certificate SAN entries:
+
+```bash
+GEPPETTO_SERVER_ALT_NAMES=config,config.example.com \
+  ./scripts/generate_certs.sh /etc/geppetto_server/pki config host1 host2
+```
+
 This creates:
 
 - a local CA
@@ -77,7 +109,10 @@ This creates:
 
 ## Agent Enrollment
 
-Agents can bootstrap their own client key and CSR. Configure the agent with paths for the CA, client cert, and private key. On first run, if those files are missing, `geppetto-auto` will:
+Agents can bootstrap their own client key and CSR. When cert paths are omitted,
+the agent defaults to `/etc/geppetto/pki/ca.crt` and
+`/etc/geppetto/pki/<hostname>.{crt,key}`. On first run, if those files are
+missing, `geppetto-auto` will:
 
 - download `/v1/ca` into `config_service_ca_cert`
 - generate `config_service_client_key`
@@ -99,14 +134,21 @@ For labs, set `GEPPETTO_AUTOSIGN=true` on the server to sign CSRs immediately. D
 The server CLI provides Puppet-style certificate operations:
 
 ```bash
-geppetto-config-server init
-geppetto-config-server cert list
-geppetto-config-server cert status host1
-geppetto-config-server cert sign host1
-geppetto-config-server cert clean host1
+sudo geppetto-config-server init
+sudo geppetto-config-server init --force
+sudo geppetto-config-server cert list
+sudo geppetto-config-server cert status host1
+sudo geppetto-config-server cert sign host1
+sudo geppetto-config-server cert clean host1
 ```
 
+Packaged installs keep `/etc/geppetto_server` readable only by root and the
+`geppetto-server` service user, so certificate management commands normally
+need `sudo`.
+
 `init` creates the CA and server certificate if they do not already exist.
+`init --force` rotates the CA/server certificate and removes stale signed agent
+certificates.
 `cert sign` signs a pending CSR from `/etc/geppetto_server/csr_pending`.
 `cert clean` removes both the pending CSR and signed cert for the host.
 
@@ -144,9 +186,6 @@ In `Geppetto`:
 [defaults]
 config_service_url = "https://config.example.com"
 config_service_path = "/etc/geppetto/config"
-config_service_ca_cert = "/etc/geppetto/pki/ca.crt"
-config_service_client_cert = "/etc/geppetto/pki/host1.crt"
-config_service_client_key = "/etc/geppetto/pki/host1.key"
 template_dir = "/etc/geppetto/config/templates"
 ```
 

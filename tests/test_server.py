@@ -70,6 +70,8 @@ def test_load_settings_defaults_to_server_etc_tree(monkeypatch) -> None:
         "GEPPETTO_CA_KEY",
         "GEPPETTO_PENDING_CSR_DIR",
         "GEPPETTO_SIGNED_CERT_DIR",
+        "GEPPETTO_SERVER_ALT_NAMES",
+        "GEPPETTO_SERVER_ENV",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -83,3 +85,48 @@ def test_load_settings_defaults_to_server_etc_tree(monkeypatch) -> None:
     assert settings.pending_csr_dir == Path("/etc/geppetto_server/csr_pending")
     assert settings.signed_cert_dir == Path("/etc/geppetto_server/certs")
     assert settings.log_file == Path("/var/log/geppetto/geppetto-server.log")
+    assert settings.server_alt_names == ()
+
+
+def test_load_settings_reads_server_alt_names(monkeypatch) -> None:
+    monkeypatch.setenv("GEPPETTO_SERVER_ALT_NAMES", "saturn.solar1.net, saturn")
+
+    settings = load_settings()
+
+    assert settings.server_alt_names == ("saturn.solar1.net", "saturn")
+
+
+def test_load_settings_reads_env_file(monkeypatch, tmp_path: Path) -> None:
+    env_file = tmp_path / "geppetto-server.env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "GEPPETTO_SERVER_BASE=/srv/geppetto_server",
+                "GEPPETTO_SERVER_NAME=saturn",
+                "GEPPETTO_SERVER_ALT_NAMES=saturn.solar1.net,saturn",
+                "GEPPETTO_SERVER_PORT=9443",
+                "",
+            ]
+        )
+    )
+    monkeypatch.setenv("GEPPETTO_SERVER_ENV", str(env_file))
+    monkeypatch.delenv("GEPPETTO_SERVER_BASE", raising=False)
+
+    settings = load_settings()
+
+    assert settings.config_root == Path("/srv/geppetto_server/config")
+    assert settings.pending_csr_dir == Path("/srv/geppetto_server/csr_pending")
+    assert settings.server_name == "saturn"
+    assert settings.server_alt_names == ("saturn.solar1.net", "saturn")
+    assert settings.bind_port == 9443
+
+
+def test_environment_overrides_env_file(monkeypatch, tmp_path: Path) -> None:
+    env_file = tmp_path / "geppetto-server.env"
+    env_file.write_text("GEPPETTO_SERVER_BASE=/srv/geppetto_server\n")
+    monkeypatch.setenv("GEPPETTO_SERVER_ENV", str(env_file))
+    monkeypatch.setenv("GEPPETTO_SERVER_BASE", "/override/geppetto_server")
+
+    settings = load_settings()
+
+    assert settings.config_root == Path("/override/geppetto_server/config")
