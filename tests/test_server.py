@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 import ssl
 from pathlib import Path
 
-from geppetto_server.server import build_ssl_context, extract_common_name
+from geppetto_server.server import build_ssl_context, extract_common_name, match_request_path, routed_paths
 from geppetto_server.settings import Settings, load_settings
 
 
@@ -85,6 +86,7 @@ def test_load_settings_defaults_to_server_etc_tree(monkeypatch) -> None:
     assert settings.pending_csr_dir == Path("/etc/geppetto_server/csr_pending")
     assert settings.signed_cert_dir == Path("/etc/geppetto_server/certs")
     assert settings.log_file == Path("/var/log/geppetto/geppetto-server.log")
+    assert settings.path_prefix == ""
     assert settings.server_alt_names == ()
 
 
@@ -96,6 +98,14 @@ def test_load_settings_reads_server_alt_names(monkeypatch) -> None:
     assert settings.server_alt_names == ("saturn.solar1.net", "saturn")
 
 
+def test_load_settings_normalizes_path_prefix(monkeypatch) -> None:
+    monkeypatch.setenv("GEPPETTO_SERVER_PATH_PREFIX", "geppetto/")
+
+    settings = load_settings()
+
+    assert settings.path_prefix == "/geppetto"
+
+
 def test_load_settings_reads_env_file(monkeypatch, tmp_path: Path) -> None:
     env_file = tmp_path / "geppetto-server.env"
     env_file.write_text(
@@ -103,6 +113,7 @@ def test_load_settings_reads_env_file(monkeypatch, tmp_path: Path) -> None:
             [
                 "GEPPETTO_SERVER_BASE=/srv/geppetto_server",
                 "GEPPETTO_SERVER_NAME=saturn",
+                "GEPPETTO_SERVER_PATH_PREFIX=/geppetto/",
                 "GEPPETTO_SERVER_ALT_NAMES=saturn.solar1.net,saturn",
                 "GEPPETTO_SERVER_PORT=9443",
                 "",
@@ -117,6 +128,7 @@ def test_load_settings_reads_env_file(monkeypatch, tmp_path: Path) -> None:
     assert settings.config_root == Path("/srv/geppetto_server/config")
     assert settings.pending_csr_dir == Path("/srv/geppetto_server/csr_pending")
     assert settings.server_name == "saturn"
+    assert settings.path_prefix == "/geppetto"
     assert settings.server_alt_names == ("saturn.solar1.net", "saturn")
     assert settings.bind_port == 9443
 
@@ -130,3 +142,19 @@ def test_environment_overrides_env_file(monkeypatch, tmp_path: Path) -> None:
     settings = load_settings()
 
     assert settings.config_root == Path("/override/geppetto_server/config")
+
+
+def test_routed_paths_accepts_root_and_prefixed_routes() -> None:
+    assert routed_paths("/v1/ca?download=1", "") == ("/v1/ca",)
+    assert routed_paths("/geppetto/v1/ca", "/geppetto") == ("/geppetto/v1/ca", "/v1/ca")
+    assert routed_paths("/health", "/geppetto") == ("/health",)
+
+
+def test_match_request_path_uses_prefixed_route_when_available() -> None:
+    match = match_request_path(
+        routed_paths("/geppetto/v1/configs/host1/bundle", "/geppetto"),
+        re.compile(r"^/v1/configs/([^/]+)/bundle$"),
+    )
+
+    assert match is not None
+    assert match.group(1) == "host1"

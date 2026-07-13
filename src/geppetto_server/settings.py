@@ -16,6 +16,7 @@ class Settings:
     signed_cert_dir: Path
     log_file: Path
     server_name: str
+    path_prefix: str = ""
     server_alt_names: tuple[str, ...] = ()
     autosign: bool = False
     bind_host: str = "0.0.0.0"
@@ -35,6 +36,7 @@ def load_settings() -> Settings:
     signed_cert_dir = Path(_setting("GEPPETTO_SIGNED_CERT_DIR", str(base_dir / "certs"), file_values))
     log_file = Path(_setting("GEPPETTO_SERVER_LOG_FILE", "/var/log/geppetto/geppetto-server.log", file_values))
     server_name = _setting("GEPPETTO_SERVER_NAME", "", file_values)
+    path_prefix = _normalize_path_prefix(_setting("GEPPETTO_SERVER_PATH_PREFIX", "", file_values))
     server_alt_names = tuple(
         name.strip()
         for name in _setting("GEPPETTO_SERVER_ALT_NAMES", "", file_values).split(",")
@@ -53,6 +55,7 @@ def load_settings() -> Settings:
         signed_cert_dir=signed_cert_dir,
         log_file=log_file,
         server_name=server_name,
+        path_prefix=path_prefix,
         server_alt_names=server_alt_names,
         autosign=autosign,
         bind_host=bind_host,
@@ -82,3 +85,10 @@ def _load_env_file(path: Path) -> dict[str, str]:
         if key:
             values[key] = value
     return values
+
+
+def _normalize_path_prefix(value: str) -> str:
+    stripped = value.strip()
+    if not stripped or stripped == "/":
+        return ""
+    return "/" + stripped.strip("/")

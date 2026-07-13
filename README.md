@@ -85,7 +85,14 @@ Optional overrides:
 export GEPPETTO_CONFIG_ROOT=/srv/geppetto/config
 export GEPPETTO_SERVER_HOST=0.0.0.0
 export GEPPETTO_SERVER_PORT=8443
+export GEPPETTO_SERVER_PATH_PREFIX=/geppetto
 ```
+
+When `GEPPETTO_SERVER_PATH_PREFIX` is set, the server also accepts requests
+under that prefix, for example `/geppetto/v1/ca` and
+`/geppetto/v1/configs/<hostname>/bundle`. Direct root paths still work, which
+lets you use either a pass-through proxy or one that strips the prefix before
+forwarding.
 
 ## Containers
 
@@ -124,6 +131,12 @@ The image:
 - writes logs to stdout
 - initializes CA/server certificates on first start
 - exposes `/health` for container health checks
+
+To publish the service under a subpath through a reverse proxy, set:
+
+```bash
+GEPPETTO_SERVER_PATH_PREFIX=/geppetto
+```
 
 For local Docker Compose:
 
@@ -245,4 +258,11 @@ When `plan` is left at the default, `geppetto-auto` will automatically use:
 
 ```text
 /etc/geppetto/config/hosts/<hostname>/plan.fops
+```
+
+If you expose the server under a subpath, include it in `config_service_url`:
+
+```toml
+[defaults]
+config_service_url = "https://config.example.com/geppetto"
 ```
