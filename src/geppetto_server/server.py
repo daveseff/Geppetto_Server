@@ -7,6 +7,7 @@ import ssl
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .bundles import ConfigBundleBuilder, HostConfigNotFoundError
 from .pki import csr_common_name, ensure_server_pki, sign_csr
@@ -14,6 +15,7 @@ from .settings import Settings
 
 
 BUNDLE_RE = re.compile(r"^/v1/configs/([^/]+)/bundle$")
+CSR_RE = re.compile(r"^/v1/csr/([^/]+)$")
 LOGGER = logging.getLogger(__name__)
 
 
@@ -41,16 +43,17 @@ class GeppettoRequestHandler(BaseHTTPRequestHandler):
     server_version = "GeppettoConfigServer/0.1"
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/health":
+        request_paths = routed_paths(self.path, self.server.settings.path_prefix)  # type: ignore[attr-defined]
+        if "/health" in request_paths:
             LOGGER.info("health-check client=%s", self.client_address[0])
             self._write_json(HTTPStatus.OK, {"status": "ok"})
             return
-        if self.path == "/v1/ca":
+        if "/v1/ca" in request_paths:
             LOGGER.info("ca-download client=%s", self.client_address[0])
             self._write_file(self.server.settings.ca_cert, "application/x-pem-file")  # type: ignore[attr-defined]
             return
 
-        match = BUNDLE_RE.match(self.path)
+        match = match_request_path(request_paths, BUNDLE_RE)
         if not match:
             self._write_json(HTTPStatus.NOT_FOUND, {"detail": "not found"})
             return
@@ -93,7 +96,8 @@ class GeppettoRequestHandler(BaseHTTPRequestHandler):
         LOGGER.info("bundle-served host=%s bytes=%s client=%s", host_name, len(payload), self.client_address[0])
 
     def do_POST(self) -> None:  # noqa: N802
-        match = re.match(r"^/v1/csr/([^/]+)$", self.path)
+        request_paths = routed_paths(self.path, self.server.settings.path_prefix)  # type: ignore[attr-defined]
+        match = match_request_path(request_paths, CSR_RE)
         if not match:
             self._write_json(HTTPStatus.NOT_FOUND, {"detail": "not found"})
             return
@@ -182,6 +186,25 @@ def build_ssl_context(settings: Settings) -> ssl.SSLContext:
     return context
 
 
+def routed_paths(request_target: str, path_prefix: str) -> tuple[str, ...]:
+    request_path = urlsplit(request_target).path or "/"
+    paths = [request_path]
+    if path_prefix:
+        if request_path == path_prefix:
+            paths.append("/")
+        elif request_path.startswith(f"{path_prefix}/"):
+            paths.append(request_path[len(path_prefix):])
+    return tuple(paths)
+
+
+def match_request_path(paths: tuple[str, ...], pattern: re.Pattern[str]) -> re.Match[str] | None:
+    for path in paths:
+        match = pattern.match(path)
+        if match:
+            return match
+    return None
+
+
 def serve(settings: Settings) -> None:
     ensure_server_pki(settings)
     server = GeppettoHTTPServer(
@@ -192,10 +215,11 @@ def serve(settings: Settings) -> None:
     )
     server.socket = build_ssl_context(settings).wrap_socket(server.socket, server_side=True)
     LOGGER.info(
-        "server-started bind=%s:%s config_root=%s log_file=%s",
+        "server-started bind=%s:%s config_root=%s path_prefix=%s log_file=%s",
         settings.bind_host,
         settings.bind_port,
         settings.config_root,
+        settings.path_prefix or "/",
         settings.log_file,
     )
     server.serve_forever()
