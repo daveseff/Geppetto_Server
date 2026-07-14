@@ -84,6 +84,7 @@ def sign_agent_cert(settings: Settings, host_name: str) -> Path:
     settings.signed_cert_dir.mkdir(parents=True, exist_ok=True)
     sign_csr(csr_path, cert_path, settings.ca_cert, settings.ca_key)
     _chmod_cert(cert_path)
+    csr_path.unlink()
     return cert_path
 
 

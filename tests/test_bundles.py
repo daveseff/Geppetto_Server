@@ -19,6 +19,7 @@ def test_build_host_bundle_collects_includes_and_templates(tmp_path: Path) -> No
     (root / "defaults").mkdir(parents=True)
     (root / "groups/staging").mkdir(parents=True)
     (root / "hosts/host1").mkdir(parents=True)
+    (root / "hosts/host1/templates").mkdir(parents=True)
     (root / "templates").mkdir(parents=True)
     (root / "hosts/host1/plan.fops").write_text(
         "\n".join(
@@ -32,6 +33,7 @@ def test_build_host_bundle_collects_includes_and_templates(tmp_path: Path) -> No
     (root / "hosts/host1/keys.fops").write_text("task 'keys' on ['host1'] {}")
     (root / "defaults/base.fops").write_text("task 'base' on ['host1'] {}")
     (root / "groups/staging/apps.fops").write_text("task 'apps' on ['host1'] {}")
+    (root / "hosts/host1/templates/sssd.conf.tmpl").write_text("services = nss, pam")
     (root / "templates/motd.tmpl").write_text("hello")
 
     payload = ConfigBundleBuilder(root).build_host_bundle("host1")
@@ -41,6 +43,7 @@ def test_build_host_bundle_collects_includes_and_templates(tmp_path: Path) -> No
         "config/groups/staging/apps.fops",
         "config/hosts/host1/keys.fops",
         "config/hosts/host1/plan.fops",
+        "config/hosts/host1/templates/sssd.conf.tmpl",
         "config/templates/motd.tmpl",
     ]
 

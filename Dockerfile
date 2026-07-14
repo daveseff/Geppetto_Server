@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GEPPETTO_SERVER_PORT=8443
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && apt-get install -y --no-install-recommends ca-certificates git openssh-client openssl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 geppetto \
     && useradd --uid 10001 --gid 10001 --home-dir /app --create-home --shell /usr/sbin/nologin geppetto \

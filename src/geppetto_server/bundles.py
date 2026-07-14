@@ -18,11 +18,15 @@ class ConfigBundleBuilder:
         self.config_root = Path(config_root).resolve()
 
     def build_host_bundle(self, host_name: str) -> bytes:
-        host_plan = self.config_root / "hosts" / host_name / "plan.fops"
+        host_dir = self.config_root / "hosts" / host_name
+        host_plan = host_dir / "plan.fops"
         if not host_plan.exists():
             raise HostConfigNotFoundError(f"host plan not found for {host_name}")
 
         files = self._collect_plan_closure(host_plan)
+        host_templates_dir = host_dir / "templates"
+        if host_templates_dir.exists():
+            files.extend(path for path in sorted(host_templates_dir.rglob("*")) if path.is_file())
         templates_dir = self.config_root / "templates"
         if templates_dir.exists():
             files.extend(path for path in sorted(templates_dir.rglob("*")) if path.is_file())

@@ -214,6 +214,40 @@ def test_sign_agent_cert_requires_pending_csr(tmp_path: Path) -> None:
         raise AssertionError("expected FileNotFoundError")
 
 
+def test_sign_agent_cert_removes_pending_csr_after_success(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    ensure_server_pki(settings)
+    settings.pending_csr_dir.mkdir(parents=True)
+    agent_key = tmp_path / "host1.key"
+    pending = settings.pending_csr_dir / "host1.csr"
+
+    subprocess.run(["openssl", "genrsa", "-out", str(agent_key), "2048"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-new",
+            "-key",
+            str(agent_key),
+            "-subj",
+            "/CN=host1",
+            "-out",
+            str(pending),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    cert_path = sign_agent_cert(settings, "host1")
+    inventory = list_certs(settings)
+
+    assert cert_path == settings.signed_cert_dir / "host1.crt"
+    assert cert_path.exists()
+    assert not pending.exists()
+    assert inventory.pending == []
+    assert inventory.signed == ["host1"]
+
+
 def test_clean_agent_cert_removes_pending_and_signed(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     settings.pending_csr_dir.mkdir(parents=True)
