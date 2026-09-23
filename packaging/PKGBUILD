@@ -1,7 +1,7 @@
 # Maintainer: Geppetto Maintainers <noreply@example.invalid>
 
 pkgname=geppetto_server
-pkgver=0.1.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="REST config service for Geppetto agents"
 arch=('any')

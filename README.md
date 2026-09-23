@@ -7,18 +7,34 @@ The service reads a Geppetto config tree such as:
 ```text
 config/
   defaults/
-  groups/
-  hosts/<hostname>/
+  groups/<group>/
+  hosts/<hostname>/plan.fops
   templates/
 ```
 
-For a request to `/v1/configs/<hostname>/bundle`, it returns a zip file containing:
+Define one or more group memberships in the host's node declaration:
 
-- `hosts/<hostname>/plan.fops`
-- any `.fops` files recursively referenced via `include`
+```text
+# config/hosts/host2/plan.fops
+node 'host2' {
+  groups = ['staging', 'database']
+}
+```
+
+If `groups` is omitted or set to an empty list (`groups = []`), the host has no
+group membership and receives no group directories.
+
+For a request to `/v1/configs/<hostname>/bundle`, the server returns a zip file containing:
+
+- a generated `plan.fops` entrypoint
+- all files under `defaults/`
+- all files from groups named by the host's `groups` node attribute
+- all files under `hosts/<hostname>/`
 - the full `templates/` directory, when present
 
-This matches the existing Geppetto layout while avoiding a full Git checkout on each host.
+Default tasks should use `on ['*']`. Group tasks may name all group hosts, for
+example `on ['host2', 'host3']`; a task declared only `on ['host3']` is skipped
+by host2 even though both hosts receive the staging group.
 Authentication is certificate-based:
 
 - the server presents its own TLS certificate
@@ -233,7 +249,7 @@ makepkg -si
 ```
 
 The Arch `PKGBUILD` builds from the parent checkout, so it works directly from
-`Geppetto_Server/packaging` without manually creating `geppetto_server-0.1.0.tar.gz`.
+`Geppetto_Server/packaging` without manually creating `geppetto_server-0.3.0.tar.gz`.
 
 Both package definitions install:
 
@@ -257,7 +273,7 @@ template_dir = "/etc/geppetto/config/templates"
 When `plan` is left at the default, `geppetto-auto` will automatically use:
 
 ```text
-/etc/geppetto/config/hosts/<hostname>/plan.fops
+/etc/geppetto/config/plan.fops
 ```
 
 If you expose the server under a subpath, include it in `config_service_url`:

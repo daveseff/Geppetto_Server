@@ -40,7 +40,7 @@ def extract_common_name(peer_cert: dict | None) -> str | None:
 
 
 class GeppettoRequestHandler(BaseHTTPRequestHandler):
-    server_version = "GeppettoConfigServer/0.1"
+    server_version = "GeppettoConfigServer/0.3"
 
     def do_GET(self) -> None:  # noqa: N802
         request_paths = routed_paths(self.path, self.server.settings.path_prefix)  # type: ignore[attr-defined]

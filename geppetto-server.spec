@@ -1,5 +1,5 @@
 Name:           geppetto_server
-Version:        0.1.0
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        REST config service for Geppetto agents
 
